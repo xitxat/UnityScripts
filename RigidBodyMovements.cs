@@ -35,6 +35,15 @@ public class RigidBodyMovement : MonoBehaviour
     [SerializeField] private float Jumpforce;
 
 
+    // Hide ingame mouse
+    //private void Start()
+    //{
+    //    Cursor.lockState= CursorLockMode.Locked;
+    //}
+
+
+
+
     // Update is called once per frame
     void Update()
     {
@@ -44,6 +53,11 @@ public class RigidBodyMovement : MonoBehaviour
 
         MovePlayer();
         MovePlayerCamera();
+    }
+
+    private void FixedUpdate()
+    {
+
     }
 
     private void MovePlayer()
@@ -72,6 +86,9 @@ public class RigidBodyMovement : MonoBehaviour
     {
         // X rotation - around the X axis for looking up / down
         xRot -= PlayerMouseInput.y * Sensitivity;
+
+        //  restrict look behind player
+        xRot = Mathf.Clamp(xRot, -90f, 90f);
 
         transform.Rotate(0f, PlayerMouseInput.x * Sensitivity, 0f);
         PlayerCamera.transform.localRotation = Quaternion.Euler(xRot, 0f, 0f);  
