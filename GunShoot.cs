@@ -20,17 +20,11 @@ using UnityEngine;
 public class GunShoot : MonoBehaviour
 {
 
-    //ray from gun intersects this layer
-    [SerializeField] private LayerMask PurpleCubesLayer;
-    [SerializeField] float hitDistance;
-
-    [SerializeField] private float Damage;  // sub health
-
-    // Gun fire rate / mode
+    [SerializeField] private FiringModes CurrentFiringMode = FiringModes.Auto;
+    [SerializeField] private LayerMask PurpleCubesLayer;        //ray from gun intersects this layer
+    [SerializeField] float hitDistance;                  // ~100f
+    [SerializeField] private float Damage;               // sub health
     [SerializeField] private float FireRate;
-    private float TimeBeforeShooting;
-    private bool Shooting;                  //IEnumerator burst
-
     [SerializeField] private AudioSource GunSoundSource;
     [SerializeField] private AudioClip GunSound;
 
@@ -39,10 +33,18 @@ public class GunShoot : MonoBehaviour
 
 
     private Camera PlayerCamera;
+    private float TimeBeforeShooting;
+    private bool Shooting;                  // IEnumerator burst
+    private int FireModeID = 1;                 // case selector mapped to Key V
 
 
-
-
+    public enum FiringModes
+    {
+        //case selectors
+        Semi =1,
+        Auto =2,
+        Burst =3
+    }
 
     void Start()
     {
@@ -53,12 +55,13 @@ public class GunShoot : MonoBehaviour
 
     }
 
-    //~~~~~~~~~~BURST SHOTS~~~~~~~~~~~~~~~~
+
+
     IEnumerator BurstShots(int TimesToShoot)
     {   // Shoot
         // When running bool shooting is true
 
-         for(int TimesShot = 1; TimesShot <= TimesToShoot; TimesShot++)
+        for (int TimesShot = 1; TimesShot <= TimesToShoot; TimesShot++)
         {
 
             //extras TODO
@@ -80,16 +83,131 @@ public class GunShoot : MonoBehaviour
             }
 
             // >Then wait - coroutine
-            yield return new WaitForSeconds(1f/FireRate);
+            yield return new WaitForSeconds(1f / FireRate);
         }
 
         Shooting = false;
 
     }
+    
     // Update is called once per frame
     void Update()
     {
-        #region  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ONE SHOT + Instant Destruction~~~~~~~~~~~~~~~~~~
+        if (Input.GetKeyDown(KeyCode.V))
+        {
+            FireModeID++;
+
+            if(FireModeID > 3)
+            {
+                FireModeID = 1;
+            }
+
+            CurrentFiringMode = (FiringModes)FireModeID;
+
+        }
+        switch (CurrentFiringMode)
+        {
+            case FiringModes.Semi:
+                Semi();
+                break;
+
+            case FiringModes.Burst:
+                Burst();
+                break;
+
+            case FiringModes.Auto:
+                Auto();
+                break;  
+
+        }
+    }// end update
+
+    void Burst()
+    {
+        if (Input.GetMouseButtonDown(0) && !Shooting)
+        {
+            StartCoroutine(BurstShots(3));
+            Shooting = true;
+        }
+    }
+
+    void Auto()
+    {
+        //add Health Script(HealthSub) to objects to be destroyed
+
+
+        if (Input.GetMouseButton(0))
+        {
+            if (TimeBeforeShooting <= 0f)
+            {
+                //extras TODO
+                GunSoundSource.PlayOneShot(GunSound);
+                //MuzzleFlash.Play();
+
+                Ray gunray = new Ray(PlayerCamera.transform.position, PlayerCamera.transform.forward);
+                if (Physics.Raycast(gunray, out RaycastHit hitInfo, hitDistance, PurpleCubesLayer))
+                {
+                    Debug.Log("hit on something");
+                    // destruction via health sub
+                    // subtract health fn. HealthSub::SubtractHealth
+                    // return info from obj's w. HealthSub script
+                    if (hitInfo.collider.gameObject.TryGetComponent(out HealthSub objHit))
+                    {
+                        objHit.SubtractHealth(Damage);
+                        Debug.Log(objHit.Health);
+                    }
+                }
+                // reset the time on shoot, allow tap fire
+                TimeBeforeShooting = 1 / FireRate;
+            }
+            else
+            {
+                TimeBeforeShooting -= Time.deltaTime;
+            }
+        }// end rapid w health
+
+        // No mouse button
+        else
+        {
+            TimeBeforeShooting = 0f;
+        }
+    }
+
+    void Semi()
+    {
+         //add Health Script(HealthSub) to objects to be destroyed
+         //gun ray(location, direction)
+         //check what is hit , distance, shoot obj on this layer
+         //out: return data
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            GunSoundSource.PlayOneShot(GunSound);
+
+            Ray gunray = new Ray(PlayerCamera.transform.position, PlayerCamera.transform.forward);
+            if (Physics.Raycast(gunray, out RaycastHit hitInfo, hitDistance, PurpleCubesLayer))
+            {
+                Debug.Log("hit on something");
+                // destruction via health sub
+                // subtract health fn. HealthSub::SubtractHealth
+                // return info from obj's w. HealthSub script
+                if (hitInfo.collider.gameObject.TryGetComponent(out HealthSub objHit))
+                {
+                    objHit.SubtractHealth(Damage);
+                    Debug.Log(objHit.Health);
+                }
+
+                // instant destruction
+                //Destroy(hitInfo.collider.gameObject);
+            }
+        }
+    }
+
+    void FiringLibrary() // Base Methods
+    {
+        // Pulled from Update() and replaced with Switch
+
+        #region  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~SEMI + Instant Destruction~~~~~~~~~~~~~~~~~~
         // No HealthSub script on destruction objects
         // gun ray(location, direction)
         // check what is hit , distance, shoot obj on this layer
@@ -108,7 +226,7 @@ public class GunShoot : MonoBehaviour
         #endregion
 
 
-        #region  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ONE SHOT + HEALTH~~~~~~~~~~~~~~~~~~
+        #region  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~SEMI + HEALTH~~~~~~~~~~~~~~~~~~
         // add Health Script (HealthSub) to objects to be destroyed
         // gun ray(location, direction)
         // check what is hit , distance, shoot obj on this layer
@@ -136,7 +254,7 @@ public class GunShoot : MonoBehaviour
         #endregion
 
 
-        #region       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~RAPID FIRE + HEALTH~~~~~~~~~~~~~~~~
+        #region       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~AUTO FIRE + HEALTH~~~~~~~~~~~~~~~~
         // add Health Script (HealthSub) to objects to be destroyed
 
 
@@ -180,8 +298,8 @@ public class GunShoot : MonoBehaviour
 
         #region       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~BURST FIRE + HEALTH~~~~~~~~~~~~~~~~
         // add Health Script (HealthSub) to objects to be destroyed
-
         // if not shooting when mouse 0 click - start burst shot Coroutine...
+
         if (Input.GetMouseButton(0) && !Shooting)
         {
             // moved fire control to IEnumerator
@@ -195,5 +313,5 @@ public class GunShoot : MonoBehaviour
 
         #endregion
 
-    }// end update
+    }
 }// end class

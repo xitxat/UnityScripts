@@ -5,11 +5,12 @@ using UnityEngine;
 public class Arrays : MonoBehaviour
 {
 
+    // arrays are statically sized on init / lists are dynamic
+
     public int[] Numbers;
 
 
 
-    // Start is called before the first frame update
     void Start()
     {
      // init array w. 3 elements
