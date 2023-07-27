@@ -4,7 +4,7 @@ using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
-    //  VERSION:::  INITIAL CRASH TEST
+
     //  mlagents-learn config/ppo/Beach.yaml --run-id=Heli_00
 
 public class AgentHelo : Agent
@@ -33,6 +33,7 @@ public class AgentHelo : Agent
     bool hasTakenOff;
     bool isHovering = false;
     bool throttleUsed = false;
+    bool isInGoal = false;
 
     #region STARTS
     public override void Initialize()
@@ -119,12 +120,20 @@ public class AgentHelo : Agent
         if (other.gameObject.CompareTag("goal"))
         {
             Debug.Log("<color=blue>...GOAL...</color>");
-            AddReward(1.0f);
-            EndEpisode();
-
+           isInGoal = true;
             goalCount++;
         }
     }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.gameObject.CompareTag("goal"))
+        {
+            isInGoal = false;
+        }
+    }
+
+
     #endregion
 
     private void Update()
@@ -156,13 +165,13 @@ public class AgentHelo : Agent
     {
         var discreteActionsOut = actionsOut.DiscreteActions;
 
-        // Roll: 'a' (left), 'd' (right)
+        // Roll: 'a' (left), 'd' (right)    Z axis
         discreteActionsOut[0] = Input.GetKey(KeyCode.Q) ? 1 : Input.GetKey(KeyCode.E) ? 2 : 0;
 
-        // Pitch: 's' (down), 'w' (up)
+        // Pitch: 's' (down), 'w' (up)  X axis
         discreteActionsOut[1] = Input.GetKey(KeyCode.S) ? 1 : Input.GetKey(KeyCode.W) ? 2 : 0;
 
-        // Yaw: 'q' (left), 'e' (right)
+        // Yaw: 'q' (left), 'e' (right) Y axis
         discreteActionsOut[2] = Input.GetKey(KeyCode.A) ? 1 : Input.GetKey(KeyCode.D) ? 2 : 0;
 
         // Throttle control: 'Space' (increase), 'LeftShift' (decrease)
@@ -250,11 +259,10 @@ public class AgentHelo : Agent
 
     private void CheckHovering()
     {
-        // Check if hovering
         if (agentThrottle >= hoverMinRPM && agentThrottle <= hoverMaxRPM)
         {
             isHovering = true;
-            if (Time.time - lastHoverPrintTime >= 0.5f) // Check if 0.5 seconds have passed since the last print
+            if (Time.time - lastHoverPrintTime >= 0.5f) // Print timer
             {
                 Debug.Log("<color=orange>...HOVERING...</color>");
                 lastHoverPrintTime = Time.time; // Update the last print time
@@ -264,14 +272,15 @@ public class AgentHelo : Agent
         {
             isHovering = false;
         }
-        // Increment hover timer if hovering
-        if (isHovering)
+        // Increment hover timer if hovering and in goal
+        if (isHovering && isInGoal)
         {
             hoverTimer += Time.fixedDeltaTime;
             if (hoverTimer >= hoverLimit)
             {
-                AddReward(0.1f);
-                hoverTimer = 0.0f; // Reset the hover timer after providing the reward
+                AddReward(1.0f);
+                hoverTimer = 0.0f; 
+                EndEpisode(); 
             }
         }
     }
@@ -295,15 +304,14 @@ public class AgentHelo : Agent
 
     private void HasLeftPad()
     {
-        // If the helicopter's Y position is higher by takeOffThreshold than the initial Y position
-        if (transform.position.y > initialYPos + takeOffThreshold)
+                if (transform.position.y > initialYPos + takeOffThreshold)
         {
-            // Only log the agentThrottle for the first time the Y position increases by takeOffThreshold
+            // Log agentThrottle first time  Y position increases by takeOffThreshold
             if (!hasTakenOff)
             {
                 Debug.Log("<color=green>AGENT THROTTLE AT TAKEOFF: </color>" + agentThrottle);
                 AddReward(0.25f);
-                hasTakenOff = true; // After logging, set this to true so it doesn't log again for the same increase
+                hasTakenOff = true; 
             }
         }
     }
