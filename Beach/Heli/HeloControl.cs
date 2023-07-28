@@ -8,8 +8,8 @@ public class HeloControl : MonoBehaviour
 
     Rigidbody rb_Heli;
 
-    [SerializeField] public float responsiveness = 5f;
-    [SerializeField] public float throttleAmt = 25f;
+    [SerializeField] public float responsiveness = 1.5f;
+    [SerializeField] public float throttleAmt = 10f;
     float throttle; // percentage
     float throttleDebugTimer = 0.5f;
     float roll;
@@ -73,7 +73,7 @@ public class HeloControl : MonoBehaviour
             throttle -= Time.deltaTime * throttleAmt;
         }
 
-        throttle = Mathf.Clamp(throttle, 0f, 100f);
+        throttle = Mathf.Clamp(throttle, 0f, 60f);
     }
 
     #region METH

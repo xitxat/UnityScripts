@@ -147,7 +147,7 @@ public class AgentHelo : Agent
             {
                 // This reward will be added each step while in the goal for the first 1.5 seconds
                 // Timer decremented in OnActionReceived
-                AddReward(10.0f / MaxStep);
+                AddReward(100.0f / MaxStep);
             }
         }
     }
