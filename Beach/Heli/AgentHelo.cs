@@ -22,16 +22,19 @@ public class AgentHelo : Agent
     float throttleChange;
     float agentThrottleDebugTimer = 0.5f;
     float lastHoverPrintTime = 0f;
-    float hoverMinRPM = 29.0f;
-    float hoverMaxRPM = 40.0f;
+    float lastAnglesPrintTime = 0f;
+    float printTimer = 0.5f;
+    float hoverMinRPM = 28.0f;
+    float hoverMaxRPM = 35.0f;
     float hoverTimer = 0.0f;
     float hoverLimit = 2.0f;
-    float agentThrottleRedLine = 75f;
+    float agentThrottleRedLine = 50f;
     float takeOffThreshold = 0.03f;
     float initialYPos;
     float rewardTimer = 0.0f;       // decrementing from rewards~ OnTriggerStay
     float logRewardTimer = 0.0f;    // In goal cummulative rewards
     const float logInterval = 0.25f;
+    const float maxFlightAngle = 60f;
     
     bool hasTakenOff;
     bool isHovering = false;
@@ -90,7 +93,7 @@ public class AgentHelo : Agent
     #region OBSERVATIONS
     public override void CollectObservations(VectorSensor sensor)
     {
-        // 20 observations 
+        // 21 observations 
         sensor.AddObservation(transform.localPosition);
         sensor.AddObservation(transform.rotation);
         sensor.AddObservation(rb_Heli.velocity);
@@ -98,6 +101,7 @@ public class AgentHelo : Agent
         sensor.AddObservation(Vector3.Distance(transform.localPosition, goalPosition));
         sensor.AddObservation(agentThrottle);
         sensor.AddObservation(throttleChange);
+        sensor.AddObservation(agentThrottleRedLine);
         sensor.AddObservation(isHovering);
         sensor.AddObservation(hasEnteredGoal);
         sensor.AddObservation(isInGoal);
@@ -109,7 +113,7 @@ public class AgentHelo : Agent
 
     #region REWARDS
 
-        void OnCollisionEnter(Collision other)
+    void OnCollisionEnter(Collision other)
     {
         switch (other.gameObject.tag)
         {
@@ -147,7 +151,7 @@ public class AgentHelo : Agent
             {
                 // This reward will be added each step while in the goal for the first 1.5 seconds
                 // Timer decremented in OnActionReceived
-                AddReward(100.0f / MaxStep);
+                AddReward(200.0f / MaxStep);
             }
         }
     }
@@ -160,6 +164,27 @@ public class AgentHelo : Agent
         }
     }
 
+    void CheckFlightAngles()
+    {
+        // Euler angles are represented in the 0 to 360 degrees format. 
+        // To capture both positive and negative, normalize to -180 to 180.
+        float roll = transform.eulerAngles.z > 180 ? transform.eulerAngles.z - 360 : transform.eulerAngles.z;
+        float pitch = transform.eulerAngles.x > 180 ? transform.eulerAngles.x - 360 : transform.eulerAngles.x;
+
+        // Mathf.Abs(roll) gives the absolute value , accounts for -ive value
+        if (Mathf.Abs(roll) > maxFlightAngle || Mathf.Abs(pitch) > maxFlightAngle)
+        {
+           AddReward(-0.05f); 
+            // Print timer
+            if (Time.time - lastAnglesPrintTime >= printTimer) 
+            {
+                Debug.Log("<color=red>...BAD ANGLE, PENALTY APPLIED...</color>");
+                lastAnglesPrintTime = Time.time; 
+            }
+        }
+    }
+
+
 
     #endregion
 
@@ -167,7 +192,7 @@ public class AgentHelo : Agent
     {
         LogGoalCount();
         LogRewardInterval();
-        HasLeftPad();
+        CheckIfHasLeftPad();
     }
 
     public override void OnActionReceived(ActionBuffers actionBuffers)
@@ -175,6 +200,7 @@ public class AgentHelo : Agent
         MoveAgent(actionBuffers.DiscreteActions);
         CheckHovering();
         CheckRedLineThrottle();
+        CheckFlightAngles();
         AddReward(-1.0f / MaxStep);
         GoalRewardTimer();
 
@@ -259,7 +285,7 @@ public class AgentHelo : Agent
 
 
         agentThrottle += Time.deltaTime * heloControl.throttleAmt * throttleChange;
-        agentThrottle = Mathf.Clamp(agentThrottle, 0f, 100f);
+        agentThrottle = Mathf.Clamp(agentThrottle, 0f, 60f);
 
         rb_Heli.AddForce(transform.up * agentThrottle, ForceMode.Impulse);
         rb_Heli.AddTorque(transform.right * pitch * heloControl.responsiveness);
@@ -283,7 +309,7 @@ public class AgentHelo : Agent
         if (agentThrottle >= hoverMinRPM && agentThrottle <= hoverMaxRPM)
         {
             isHovering = true;
-            if (Time.time - lastHoverPrintTime >= 0.5f) // Print timer
+            if (Time.time - lastHoverPrintTime >= printTimer) // Print timer
             {
                 Debug.Log("<color=orange>...HOVERING...</color>");
                 lastHoverPrintTime = Time.time; // Update the last print time
@@ -301,6 +327,7 @@ public class AgentHelo : Agent
             {
                 AddReward(1.0f);
                 hoverTimer = 0.0f; 
+                Debug.Log("<color=pink>...isHovering && isInGoal...</color>");
                 EndEpisode(); 
             }
         }
@@ -319,11 +346,11 @@ public class AgentHelo : Agent
     {
         if(agentThrottle > agentThrottleRedLine)
         {
-            AddReward(-1.0f / MaxStep);
+            AddReward(-100.0f / MaxStep);
         }
     }
 
-    private void HasLeftPad()
+    private void CheckIfHasLeftPad()
     {
                 if (transform.position.y > initialYPos + takeOffThreshold)
         {
