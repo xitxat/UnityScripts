@@ -29,10 +29,14 @@ public class AgentHelo : Agent
     float agentThrottleRedLine = 75f;
     float takeOffThreshold = 0.03f;
     float initialYPos;
+    float rewardTimer = 0.0f;       // decrementing from rewards~ OnTriggerStay
+    float logRewardTimer = 0.0f;    // In goal cummulative rewards
+    const float logInterval = 0.25f;
     
     bool hasTakenOff;
     bool isHovering = false;
     bool throttleUsed = false;
+    bool hasEnteredGoal = false;
     bool isInGoal = false;
 
     #region STARTS
@@ -42,6 +46,8 @@ public class AgentHelo : Agent
         rb_Heli = heloControl.GetComponent<Rigidbody>();
         originalPosition = transform.localPosition;
         hasTakenOff = false;
+        hasEnteredGoal = false;
+        rewardTimer = 0;
         InvokeRepeating("AgentThrottleDebugLog", 0f, agentThrottleDebugTimer);
     }
 
@@ -57,6 +63,8 @@ public class AgentHelo : Agent
         throttleUsed = false;
         initialYPos = transform.position.y;
         hasTakenOff = false;
+        hasEnteredGoal = false;
+        rewardTimer = 0;
 
         int randomRotation = UnityEngine.Random.Range(0, 4);
         // Rotate the agent based on the random integer
@@ -82,7 +90,7 @@ public class AgentHelo : Agent
     #region OBSERVATIONS
     public override void CollectObservations(VectorSensor sensor)
     {
-        // 18 observations 
+        // 20 observations 
         sensor.AddObservation(transform.localPosition);
         sensor.AddObservation(transform.rotation);
         sensor.AddObservation(rb_Heli.velocity);
@@ -91,6 +99,8 @@ public class AgentHelo : Agent
         sensor.AddObservation(agentThrottle);
         sensor.AddObservation(throttleChange);
         sensor.AddObservation(isHovering);
+        sensor.AddObservation(hasEnteredGoal);
+        sensor.AddObservation(isInGoal);
         sensor.AddObservation(heloControl.Throttle());
 
     }
@@ -120,8 +130,25 @@ public class AgentHelo : Agent
         if (other.gameObject.CompareTag("goal"))
         {
             Debug.Log("<color=blue>...GOAL...</color>");
-           isInGoal = true;
+            CheckFirstGoalEntry();
+
+            rewardTimer = 1.5f; // countdown when entering goal
+            isInGoal = true;
             goalCount++;
+        }
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        if (other.gameObject.CompareTag("goal"))
+        {
+            // Only reward for the first 1.5 seconds in the goal
+            if(rewardTimer > 0)
+            {
+                // This reward will be added each step while in the goal for the first 1.5 seconds
+                // Timer decremented in OnActionReceived
+                AddReward(10.0f / MaxStep);
+            }
         }
     }
 
@@ -138,16 +165,8 @@ public class AgentHelo : Agent
 
     private void Update()
     {
-        // Countdown the timer
-        goalCountTimer -= Time.deltaTime;
-        
-        // Log goal count every 30 seconds
-        if (goalCountTimer <= 0.0f)
-        {
-            Debug.Log("Goal Count: " + goalCount);
-            goalCountTimer = 10.0f; // Reset the timer
-        }
-
+        LogGoalCount();
+        LogRewardInterval();
         HasLeftPad();
     }
 
@@ -157,6 +176,8 @@ public class AgentHelo : Agent
         CheckHovering();
         CheckRedLineThrottle();
         AddReward(-1.0f / MaxStep);
+        GoalRewardTimer();
+
 
     }
 
@@ -316,5 +337,47 @@ public class AgentHelo : Agent
         }
     }
 
+    private void CheckFirstGoalEntry()
+    {
+        if (!hasEnteredGoal)
+        {
+            AddReward(0.25f);
+            hasEnteredGoal = true;
+        }
+    }
+
+    void LogGoalCount()
+    {
+        goalCountTimer -= Time.deltaTime;
+        if (goalCountTimer <= 0.0f)
+        {
+            Debug.Log("Goal Count: " + goalCount);
+            goalCountTimer = 10.0f; // Reset the timer
+        }
+    }
+
+    void GoalRewardTimer()
+    {
+            // Decrement reward timer at each step
+        if (rewardTimer > 0)
+        {
+            rewardTimer -= Time.fixedDeltaTime;
+        }
+    }
+
+    void LogRewardInterval()
+    {
+        // Only log if in goal and during reward period
+        if (isInGoal && rewardTimer > 0) {
+            // Decrement log timer
+            logRewardTimer -= Time.deltaTime;
+
+            // If log interval has elapsed, log the reward and reset timer
+            if (logRewardTimer <= 0.0f) {
+                Debug.Log("Cumulative reward: " + GetCumulativeReward());
+                logRewardTimer = logInterval;
+            }
+        }
+    }
     #endregion
 }
